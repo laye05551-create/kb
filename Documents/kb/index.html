@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KB Cosmétique - Gestion de Stock & Caisse</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        .hidden-tab { display: none; }
+        .hidden-role { display: none; }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+<div class="container mx-auto px-4 py-6 max-w-7xl">
+    <!-- En-tête -->
+    <div class="bg-gradient-to-r from-purple-700 to-pink-600 rounded-2xl shadow-xl p-6 mb-8 text-white">
+        <div class="flex justify-between items-center flex-wrap gap-4">
+            <div>
+                <h1 class="text-3xl font-bold">💄 KB Cosmétique</h1>
+                <p class="opacity-90">Système professionnel de gestion</p>
+            </div>
+            <div class="flex gap-3">
+                <div class="bg-white/20 rounded-lg px-4 py-2">
+                    <span class="font-bold">Devise :</span> FCFA
+                </div>
+                <button id="btnDeconnexion" onclick="deconnexion()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg hidden">🚪 Déconnexion</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Écran de connexion -->
+    <div id="ecranConnexion" class="max-w-md mx-auto bg-white rounded-xl shadow-xl p-8">
+        <h2 class="text-2xl font-bold text-center mb-6">🔐 Connexion KB Cosmétique</h2>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-gray-700 mb-2">Rôle</label>
+                <select id="roleSelect" class="w-full border rounded-lg px-4 py-3">
+                    <option value="admin">👑 Administrateur (Propriétaire)</option>
+                    <option value="vendeur">🛒 Vendeur (Caissier)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-gray-700 mb-2">Mot de passe</label>
+                <input type="password" id="motDePasse" class="w-full border rounded-lg px-4 py-3" placeholder="Mot de passe">
+            </div>
+            <button onclick="connexion()" class="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 font-bold">
+                Se connecter
+            </button>
+            <div id="erreurConnexion" class="text-red-600 text-center hidden">❌ Mot de passe incorrect</div>
+            <div class="text-center text-sm text-gray-500 mt-4">
+                <p>👑 Admin: admin | 🛒 Vendeur: vendeur</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interface principale -->
+    <div id="interfacePrincipale" class="hidden">
+        <!-- Infos utilisateur -->
+        <div class="bg-white rounded-xl shadow-md p-4 mb-6 flex justify-between items-center flex-wrap gap-4">
+            <div>
+                <span id="roleBadge" class="px-3 py-1 rounded-full text-sm font-bold"></span>
+                <span id="userNom" class="ml-3 font-semibold"></span>
+            </div>
+            <div id="adminOnlyInfo" class="text-gray-500 text-sm hidden-role admin-only">
+                🔐 Mode administrateur - Gestion complète
+            </div>
+            <div id="vendeurOnlyInfo" class="text-gray-500 text-sm hidden-role vendeur-only">
+                🛒 Mode vendeur - Ventes & tickets
+            </div>
+        </div>
+
+        <!-- Sélecteur de magasin -->
+        <div class="bg-white rounded-xl shadow-md p-4 mb-6">
+            <div class="flex flex-wrap gap-4 items-center">
+                <label class="font-semibold text-gray-700">🏪 Magasin :</label>
+                <select id="selectMagasin" class="border rounded-lg px-4 py-2 flex-1 max-w-xs">
+                    <option value="0">KB Cosmétique Principal</option>
+                </select>
+                <button onclick="changerMagasin()" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">
+                    🔄 Changer
+                </button>
+                <button onclick="ouvrirModalMagasin()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 admin-only hidden-role">
+                    ➕ Nouveau magasin
+                </button>
+            </div>
+        </div>
+
+        <!-- Tableau de Bord -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-white rounded-xl shadow-md p-4 border-l-4 border-purple-600">
+                <p class="text-gray-500 text-sm">📦 Produits</p>
+                <p id="totalProduits" class="text-2xl font-bold">0</p>
+            </div>
+            <div class="bg-white rounded-xl shadow-md p-4 border-l-4 border-green-600">
+                <p class="text-gray-500 text-sm">💰 Valeur stock</p>
+                <p id="valeurStock" class="text-2xl font-bold">0 FCFA</p>
+            </div>
+            <div class="bg-white rounded-xl shadow-md p-4 border-l-4 border-blue-600">
+                <p class="text-gray-500 text-sm">📈 CA aujourd'hui</p>
+                <p id="caJour" class="text-2xl font-bold">0 FCFA</p>
+            </div>
+            <div class="bg-white rounded-xl shadow-md p-4 border-l-4 border-orange-600">
+                <p class="text-gray-500 text-sm">⚠️ Stock faible</p>
+                <p id="stockFaible" class="text-2xl font-bold text-orange-600">0</p>
+            </div>
+        </div>
+
+        <!-- Onglets -->
+        <div class="flex gap-2 mb-6 flex-wrap">
+            <button onclick="changerOnglet('caisse')" id="tab-caisse" class="px-6 py-2 rounded-lg bg-purple-600 text-white">🛒 Caisse</button>
+            <button onclick="changerOnglet('produits')" id="tab-produits" class="px-6 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 admin-only hidden-role">📋 Produits</button>
+            <button onclick="changerOnglet('ventes')" id="tab-ventes" class="px-6 py-2 rounded-lg bg-gray-200 hover:bg-gray-300">📊 Historique</button>
+            <button onclick="changerOnglet('export')" id="tab-export" class="px-6 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 admin-only hidden-role">📎 Export</button>
+            <button onclick="changerOnglet('imprimante')" id="tab-imprimante" class="px-6 py-2 rounded-lg bg-gray-200 hover:bg-gray-300">🖨️ Imprimante</button>
+        </div>
+
+        <!-- Onglet Caisse -->
+        <div id="onglet-caisse" class="bg-white rounded-xl shadow-md p-6">
+            <h2 class="text-xl font-bold mb-4">🛒 Encaissement</h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-gray-700 mb-2">Produit</label>
+                    <select id="produitVente" class="w-full border rounded-lg px-4 py-3">
+                        <option value="">Choisir un produit</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-gray-700 mb-2">Quantité</label>
+                    <input type="number" id="quantiteVente" class="w-full border rounded-lg px-4 py-3" value="1" min="1">
+                </div>
+            </div>
+            <div class="mt-4 text-right">
+                <p class="text-lg">Total : <span id="totalVente" class="font-bold text-purple-600 text-2xl">0</span> FCFA</p>
+                <button onclick="effectuerVente()" class="mt-4 bg-purple-600 text-white px-8 py-3 rounded-lg hover:bg-purple-700 font-bold text-lg">
+                    💵 ENCAISSER & IMPRIMER
+                </button>
+            </div>
+        </div>
+
+        <!-- Onglet Produits (admin uniquement) -->
+        <div id="onglet-produits" class="bg-white rounded-xl shadow-md p-6 hidden-tab">
+            <h2 class="text-xl font-bold mb-4">➕ Gestion des produits</h2>
+            <input type="hidden" id="produitId">
+            <div class="grid md:grid-cols-4 gap-4 mb-6">
+                <input type="text" id="produitNom" placeholder="Nom du produit" class="border rounded-lg px-4 py-2">
+                <input type="number" id="produitPrix" placeholder="Prix (FCFA)" class="border rounded-lg px-4 py-2">
+                <input type="number" id="produitQuantite" placeholder="Quantité" class="border rounded-lg px-4 py-2" value="0">
+                <button onclick="ajouterProduit()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">➕ Ajouter / Modifier</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full border">
+                    <thead class="bg-gray-100"><tr><th class="px-4 py-2 border">ID</th><th class="px-4 py-2 border">Produit</th><th class="px-4 py-2 border">Prix (FCFA)</th><th class="px-4 py-2 border">Stock</th><th class="px-4 py-2 border">Actions</th></tr></thead>
+                    <tbody id="listeProduits"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Onglet Historique (visible pour tous, admin peut supprimer) -->
+        <div id="onglet-ventes" class="bg-white rounded-xl shadow-md p-6 hidden-tab">
+            <h2 class="text-xl font-bold mb-4">📊 Historique des ventes</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full border">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-4 py-2 border">Date</th>
+                            <th class="px-4 py-2 border">Produit</th>
+                            <th class="px-4 py-2 border">Qté</th>
+                            <th class="px-4 py-2 border">Prix unit.</th>
+                            <th class="px-4 py-2 border">Total</th>
+                            <th class="px-4 py-2 border">Ticket</th>
+                            <th class="px-4 py-2 border admin-only hidden-role">Supprimer</th>
+                        </tr>
+                    </thead>
+                    <tbody id="listeVentes"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Onglet Export (admin uniquement) -->
+        <div id="onglet-export" class="bg-white rounded-xl shadow-md p-6 hidden-tab">
+            <h2 class="text-xl font-bold mb-4">📎 Exporter les données</h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="border rounded-lg p-4"><h3 class="font-bold mb-2">📊 Produits</h3><button onclick="exportExcelProduits()" class="bg-green-600 text-white px-4 py-2 rounded w-full mb-2">📅 Export Excel</button><button onclick="exportPDFProduits()" class="bg-red-600 text-white px-4 py-2 rounded w-full">📄 Export PDF</button></div>
+                <div class="border rounded-lg p-4"><h3 class="font-bold mb-2">📈 Ventes</h3><button onclick="exportExcelVentes()" class="bg-green-600 text-white px-4 py-2 rounded w-full mb-2">📅 Export Excel</button><button onclick="exportPDFVentes()" class="bg-red-600 text-white px-4 py-2 rounded w-full">📄 Export PDF</button></div>
+            </div>
+        </div>
+
+        <!-- Onglet Configuration Imprimante (accessible à tous) -->
+        <div id="onglet-imprimante" class="bg-white rounded-xl shadow-md p-6 hidden-tab">
+            <h2 class="text-xl font-bold mb-4">🖨️ Configuration de l'imprimante</h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="border rounded-lg p-4">
+                    <h3 class="font-bold mb-2">📏 Format du ticket</h3>
+                    <label class="block text-sm mb-2">Largeur du papier: <strong>80mm</strong> (Epson TM-T20III)</label>
+                    <label class="block text-sm mb-2">Type: <strong>Thermique</strong></label>
+                    <button onclick="ticketTest()" class="bg-blue-600 text-white px-4 py-2 rounded w-full mt-4">🖨️ Imprimer ticket test</button>
+                </div>
+                <div class="border rounded-lg p-4">
+                    <h3 class="font-bold mb-2">⚙️ Instructions pour Windows</h3>
+                    <ol class="text-sm list-decimal pl-4 space-y-1">
+                        <li>Branchez l'imprimante Epson en USB</li>
+                        <li>Téléchargez le driver sur <strong>epson.com</strong></li>
+                        <li>Allez dans <strong>Paramètres → Périphériques → Imprimantes</strong></li>
+                        <li>Définissez <strong>Epson TM-T20III</strong> comme imprimante par défaut</li>
+                        <li>Désactivez <strong>"Aperçu avant impression"</strong></li>
+                        <li>Dans Chrome, allez dans <strong>Paramètres → Impression → Destination → Enregistrer comme imprimante par défaut</strong></li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nouveau magasin -->
+<div id="modalMagasin" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-xl p-6 w-96">
+        <h3 class="text-xl font-bold mb-4">➕ Nouveau magasin</h3>
+        <input type="text" id="newMagasinNom" placeholder="Nom du magasin" class="w-full border rounded-lg px-4 py-2 mb-3">
+        <input type="text" id="newMagasinAdresse" placeholder="Adresse" class="w-full border rounded-lg px-4 py-2 mb-4">
+        <div class="flex gap-3"><button onclick="ajouterMagasin()" class="bg-green-600 text-white px-4 py-2 rounded flex-1">Créer</button><button onclick="fermerModalMagasin()" class="bg-gray-600 text-white px-4 py-2 rounded flex-1">Annuler</button></div>
+    </div>
+</div>
+
+<script>
+    // ============ COMPTES ============
+    const COMPTES = {
+        admin: { motDePasse: "DIOP2000", nom: "Propriétaire KB", role: "admin" },
+        vendeur: { motDePasse: "FALL2000", nom: "Vendeur KB", role: "vendeur" }
+    };
+    
+    let utilisateurActuel = null;
+    let magasins = [];
+    let produits = [];
+    let ventes = [];
+    let magasinActuel = 0;
+    
+    // ============ DONNÉES ============
+    function chargerDonnees() {
+        const data = localStorage.getItem('kb_cosmetique');
+        if(data) {
+            const parsed = JSON.parse(data);
+            magasins = parsed.magasins || [];
+            produits = parsed.produits || [];
+            ventes = parsed.ventes || [];
+        }
+        if(magasins.length === 0) {
+            magasins = [{ id: 0, nom: "KB Cosmétique Principal", adresse: "Dakar, Sénégal" }];
+        }
+        if(magasins.length > 0 && magasinActuel === 0) {
+            magasinActuel = magasins[0].id;
+        }
+        sauvegarderDonnees();
+    }
+    
+    function sauvegarderDonnees() {
+        localStorage.setItem('kb_cosmetique', JSON.stringify({ magasins, produits, ventes }));
+    }
+    
+    function getProduitsActuels() {
+        return produits.filter(p => p.magasin_id === magasinActuel);
+    }
+    
+    function getVentesActuelles() {
+        return ventes.filter(v => v.magasin_id === magasinActuel);
+    }
+    
+    // ============ AFFICHAGE ============
+    function mettreAJourAffichageParRole() {
+        const isAdmin = utilisateurActuel?.role === 'admin';
+        document.querySelectorAll('.admin-only').forEach(el => {
+            if(isAdmin) el.classList.remove('hidden-role');
+            else el.classList.add('hidden-role');
+        });
+        document.querySelectorAll('.vendeur-only').forEach(el => {
+            if(!isAdmin) el.classList.remove('hidden-role');
+            else el.classList.add('hidden-role');
+        });
+        
+        const roleBadge = document.getElementById('roleBadge');
+        const userNom = document.getElementById('userNom');
+        if(isAdmin) {
+            roleBadge.className = "px-3 py-1 rounded-full text-sm font-bold bg-purple-600 text-white";
+            roleBadge.innerText = "👑 Administrateur";
+            userNom.innerText = COMPTES.admin.nom;
+        } else {
+            roleBadge.className = "px-3 py-1 rounded-full text-sm font-bold bg-blue-600 text-white";
+            roleBadge.innerText = "🛒 Vendeur";
+            userNom.innerText = COMPTES.vendeur.nom;
+        }
+    }
+    
+    function changerOnglet(onglet) {
+        document.querySelectorAll('[id^="onglet-"]').forEach(el => el.classList.add('hidden-tab'));
+        document.getElementById(`onglet-${onglet}`)?.classList.remove('hidden-tab');
+        ['caisse','produits','ventes','export','imprimante'].forEach(t => {
+            const btn = document.getElementById(`tab-${t}`);
+            if(btn) { btn.classList.remove('bg-purple-600','text-white'); btn.classList.add('bg-gray-200'); }
+        });
+        const btnActif = document.getElementById(`tab-${onglet}`);
+        if(btnActif) { btnActif.classList.remove('bg-gray-200'); btnActif.classList.add('bg-purple-600','text-white'); }
+    }
+    
+    function afficherProduits() {
+        const produitsActuels = getProduitsActuels();
+        const tbody = document.getElementById('listeProduits');
+        const select = document.getElementById('produitVente');
+        tbody.innerHTML = '';
+        select.innerHTML = '<option value="">Choisir un produit</option>';
+        
+        produitsActuels.forEach(p => {
+            tbody.innerHTML += `
+                <tr><td class="border px-4 py-2">${p.id}</td>
+                <td class="border px-4 py-2">${p.nom}</td>
+                <td class="border px-4 py-2 text-right">${p.prix.toLocaleString()} FCFA</td>
+                <td class="border px-4 py-2 text-right ${p.quantite < 5 ? 'text-red-600 font-bold' : ''}">${p.quantite}</td>
+                <td class="border px-4 py-2 text-center">
+                    <button onclick="modifierProduit(${p.id})" class="bg-blue-500 text-white px-2 py-1 rounded">✏️</button>
+                    <button onclick="supprimerProduit(${p.id})" class="bg-red-500 text-white px-2 py-1 rounded">🗑️</button>
+                </td>
+            </tr>
+            `;
+            select.innerHTML += `<option value="${p.id}" data-prix="${p.prix}">${p.nom} - ${p.prix.toLocaleString()} FCFA (Stock: ${p.quantite})</option>`;
+        });
+        afficherVentes();
+        afficherDashboard();
+    }
+    
+    function afficherVentes() {
+        const ventesActuelles = getVentesActuelles();
+        const tbody = document.getElementById('listeVentes');
+        tbody.innerHTML = '';
+        const isAdmin = utilisateurActuel?.role === 'admin';
+        
+        ventesActuelles.slice().reverse().forEach(v => {
+            const produit = produits.find(p => p.id === v.produit_id);
+            let row = `
+                <tr>
+                    <td class="border px-4 py-2">${new Date(v.date_vente).toLocaleDateString()} ${new Date(v.date_vente).toLocaleTimeString()}</td>
+                    <td class="border px-4 py-2">${produit ? produit.nom : 'N/A'}</td>
+                    <td class="border px-4 py-2 text-center">${v.quantite}</td>
+                    <td class="border px-4 py-2 text-right">${v.prix_unitaire.toLocaleString()} FCFA</td>
+                    <td class="border px-4 py-2 text-right font-bold">${v.total.toLocaleString()} FCFA</td>
+                    <td class="border px-4 py-2 text-center"><button onclick="reimprimerTicket(${v.id})" class="bg-purple-600 text-white px-2 py-1 rounded">🖨️ Ticket</button></td>
+            `;
+            if(isAdmin) {
+                row += `<td class="border px-4 py-2 text-center"><button onclick="supprimerVente(${v.id})" class="bg-red-600 text-white px-2 py-1 rounded">🗑️ Supprimer</button></td>`;
+            }
+            row += `</tr>`;
+            tbody.innerHTML += row;
+        });
+    }
+    
+    function afficherDashboard() {
+        const produitsActuels = getProduitsActuels();
+        const ventesActuelles = getVentesActuelles();
+        const aujourdhui = new Date().toDateString();
+        document.getElementById('totalProduits').innerText = produitsActuels.length;
+        document.getElementById('valeurStock').innerText = produitsActuels.reduce((s,p)=>s+(p.prix*p.quantite),0).toLocaleString()+' FCFA';
+        document.getElementById('caJour').innerText = ventesActuelles.filter(v=>new Date(v.date_vente).toDateString()===aujourdhui).reduce((s,v)=>s+v.total,0).toLocaleString()+' FCFA';
+        document.getElementById('stockFaible').innerText = produitsActuels.filter(p=>p.quantite<5).length;
+    }
+    
+    // ============ IMPRESSION DE TICKET (accessible vendeur ET admin) ============
+    function genererHTMLTicket(vente, produit, magasin) {
+        const maintenant = new Date(vente.date_vente);
+        const numeroTicket = `${maintenant.getDate()}${maintenant.getMonth()+1}${maintenant.getFullYear()}-${vente.id.toString().slice(-4)}`;
+        
+        return `
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="UTF-8"><title>Ticket KB Cosmétique</title>
+            <style>
+                body {
+                    width: 80mm;
+                    margin: 0;
+                    padding: 2mm;
+                    font-family: 'Courier New', monospace;
+                    font-size: 11px;
+                    background: white;
+                }
+                .ticket { text-align: center; }
+                .header { font-size: 14px; font-weight: bold; }
+                .subheader { font-size: 9px; margin: 3px 0; }
+                hr { border: none; border-top: 1px dashed #000; margin: 4px 0; }
+                .product-line { display: flex; justify-content: space-between; margin: 2px 0; }
+                .total { font-weight: bold; font-size: 13px; }
+                .footer { margin-top: 8px; font-size: 9px; }
+            </style>
+            </head>
+            <body>
+                <div class="ticket">
+                    <div class="header">💄 KB COSMÉTIQUE</div>
+                    <div class="subheader">${magasin ? magasin.nom : 'KB Cosmétique'}<br>Tel: +221 78 000 00 00</div>
+                    <hr>
+                    <div>Ticket N°: ${numeroTicket}</div>
+                    <div>${maintenant.toLocaleDateString()} ${maintenant.toLocaleTimeString()}</div>
+                    <div>Vendeur: ${vente.vendeur || 'KB'}</div>
+                    <hr>
+                    <div class="product-line"><span>${produit ? produit.nom : 'Produit'}</span><span>${vente.quantite} x ${vente.prix_unitaire.toLocaleString()}</span></div>
+                    <div class="product-line"><span></span><span>= ${vente.total.toLocaleString()} FCFA</span></div>
+                    <hr>
+                    <div class="product-line total"><span>TOTAL À PAYER</span><span>${vente.total.toLocaleString()} FCFA</span></div>
+                    <hr>
+                    <div>💰 Règlement: Espèces</div>
+                    <div>✅ Transaction validée</div>
+                    <hr>
+                    <div class="footer">Merci de votre visite !<br>À bientôt chez KB Cosmétique<br>★★★★★</div>
+                </div>
+                <script>window.onload = function() { window.print(); setTimeout(function() { window.close(); }, 500); }<\/script>
+            </body>
+            </html>
+        `;
+    }
+    
+    function imprimerTicket(venteId) {
+        const vente = ventes.find(v => v.id === venteId);
+        if(!vente) { alert("Vente introuvable"); return; }
+        const produit = produits.find(p => p.id === vente.produit_id);
+        const magasin = magasins.find(m => m.id === vente.magasin_id);
+        
+        const ticketHTML = genererHTMLTicket(vente, produit, magasin);
+        const printWindow = window.open('', '_blank', 'width=400,height=600,left=0,top=0');
+        printWindow.document.write(ticketHTML);
+        printWindow.document.close();
+    }
+    
+    function reimprimerTicket(venteId) {
+        imprimerTicket(venteId);
+    }
+    
+    function ticketTest() {
+        const testVente = {
+            id: 999,
+            produit_id: 0,
+            quantite: 1,
+            prix_unitaire: 1000,
+            total: 1000,
+            magasin_id: magasinActuel,
+            vendeur: "TEST",
+            date_vente: new Date().toISOString()
+        };
+        const testProduit = { nom: "PRODUIT TEST" };
+        const magasin = magasins.find(m => m.id === magasinActuel);
+        const ticketHTML = genererHTMLTicket(testVente, testProduit, magasin);
+        const printWindow = window.open('', '_blank', 'width=400,height=600');
+        printWindow.document.write(ticketHTML);
+        printWindow.document.close();
+    }
+    
+    // ============ SUPPRIMER UNE VENTE (admin uniquement) ============
+    function supprimerVente(venteId) {
+        if(utilisateurActuel?.role !== 'admin') {
+            alert("Seul l'administrateur peut supprimer une vente");
+            return;
+        }
+        
+        const vente = ventes.find(v => v.id === venteId);
+        if(!vente) return;
+        
+        if(confirm(`Supprimer cette vente de ${vente.total.toLocaleString()} FCFA ?\nLe stock sera réapprovisionné.`)) {
+            // Restaurer le stock
+            const produit = produits.find(p => p.id === vente.produit_id);
+            if(produit) {
+                produit.quantite += vente.quantite;
+            }
+            // Supprimer la vente
+            ventes = ventes.filter(v => v.id !== venteId);
+            sauvegarderDonnees();
+            afficherProduits();
+            alert("✅ Vente supprimée et stock restauré !");
+        }
+    }
+    
+    // ============ GESTION PRODUITS ============
+    function ajouterProduit() {
+        if(utilisateurActuel?.role !== 'admin') { alert("Réservé à l'administrateur"); return; }
+        const id = document.getElementById('produitId').value;
+        const nom = document.getElementById('produitNom').value;
+        const prix = parseFloat(document.getElementById('produitPrix').value);
+        const quantite = parseInt(document.getElementById('produitQuantite').value) || 0;
+        if(!nom || isNaN(prix)) { alert('Veuillez remplir le nom et le prix'); return; }
+        
+        if(id) {
+            const index = produits.findIndex(p => p.id == id);
+            if(index !== -1) { produits[index] = { ...produits[index], nom, prix, quantite }; }
+            alert('✅ Produit modifié !');
+        } else {
+            produits.push({ id: Date.now(), nom, prix, quantite, magasin_id: magasinActuel, date_ajout: new Date().toISOString() });
+            alert('✅ Produit ajouté !');
+        }
+        document.getElementById('produitId').value = '';
+        document.getElementById('produitNom').value = '';
+        document.getElementById('produitPrix').value = '';
+        document.getElementById('produitQuantite').value = '0';
+        sauvegarderDonnees();
+        afficherProduits();
+    }
+    
+    function modifierProduit(id) {
+        if(utilisateurActuel?.role !== 'admin') { alert("Réservé à l'administrateur"); return; }
+        const produit = produits.find(p => p.id === id);
+        if(produit) {
+            document.getElementById('produitId').value = produit.id;
+            document.getElementById('produitNom').value = produit.nom;
+            document.getElementById('produitPrix').value = produit.prix;
+            document.getElementById('produitQuantite').value = produit.quantite;
+            changerOnglet('produits');
+        }
+    }
+    
+    function supprimerProduit(id) {
+        if(utilisateurActuel?.role !== 'admin') { alert("Réservé à l'administrateur"); return; }
+        if(confirm('Supprimer ce produit ?')) {
+            produits = produits.filter(p => p.id !== id);
+            sauvegarderDonnees();
+            afficherProduits();
+        }
+    }
+    
+    // ============ VENTES ============
+    async function effectuerVente() {
+        const produitId = parseInt(document.getElementById('produitVente').value);
+        const quantite = parseInt(document.getElementById('quantiteVente').value);
+        if(!produitId || quantite < 1) { alert('Sélectionnez un produit'); return; }
+        
+        const produit = produits.find(p => p.id === produitId);
+        if(!produit) { alert('Produit non trouvé'); return; }
+        if(produit.quantite < quantite) { alert('Stock insuffisant !'); return; }
+        
+        const total = produit.prix * quantite;
+        const nouvelleVente = {
+            id: Date.now(),
+            produit_id: produitId,
+            quantite: quantite,
+            prix_unitaire: produit.prix,
+            total: total,
+            magasin_id: magasinActuel,
+            vendeur: utilisateurActuel?.nom || "Vendeur",
+            date_vente: new Date().toISOString()
+        };
+        ventes.push(nouvelleVente);
+        produit.quantite -= quantite;
+        
+        sauvegarderDonnees();
+        alert(`✅ Vente effectuée ! Total : ${total.toLocaleString()} FCFA`);
+        document.getElementById('quantiteVente').value = 1;
+        afficherProduits();
+        
+        // Impression automatique du ticket (accessible au vendeur)
+        setTimeout(() => { imprimerTicket(nouvelleVente.id); }, 500);
+    }
+    
+    // ============ EXPORTS (admin uniquement) ============
+    function exportExcelProduits() {
+        if(utilisateurActuel?.role !== 'admin') { alert("Réservé à l'administrateur"); return; }
+        const data = getProduitsActuels().map(p => ({ ID: p.id, Produit: p.nom, 'Prix FCFA': p.prix, Stock: p.quantite, Valeur: p.prix * p.quantite }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Produits');
+        XLSX.writeFile(wb, `kb_cosmetique_produits.xlsx`);
+    }
+    
+    function exportPDFProduits() {
+        if(utilisateurActuel?.role !== 'admin') { alert("Réservé à l'administrateur"); return; }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        doc.text("KB Cosmétique - Produits", 14, 20);
+        const body = getProduitsActuels().map(p => [p.id, p.nom, `${p.prix} FCFA`, p.quantite]);
+        doc.autoTable({ startY: 30, head: [["ID","Produit","Prix","Stock"]], body });
+        doc.save('produits.pdf');
+    }
+    
+    function exportExcelVentes() {
+        if(utilisateurActuel?.role !== 'admin') { alert("Réservé à l'administrateur"); return; }
+        const data = getVentesActuelles().map(v => ({ Date: new Date(v.date_vente).toLocaleString(), Total: v.total + ' FCFA' }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Ventes');
+        XLSX.writeFile(wb, `kb_cosmetique_ventes.xlsx`);
+    }
+    
+    function exportPDFVentes() {
+        if(utilisateurActuel?.role !== 'admin') { alert("Réservé à l'administrateur"); return; }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        doc.text("KB Cosmétique - Ventes", 14, 20);
+        const body = getVentesActuelles().map(v => [new Date(v.date_vente).toLocaleDateString(), v.total + ' FCFA']);
+        doc.autoTable({ startY: 30, head: [["Date","Total"]], body });
+        doc.save('ventes.pdf');
+    }
+    
+    // ============ MAGASINS ============
+    function afficherMagasins() {
+        const select = document.getElementById('selectMagasin');
+        select.innerHTML = '';
+        magasins.forEach(m => { select.innerHTML += `<option value="${m.id}" ${m.id === magasinActuel ? 'selected' : ''}>${m.nom}</option>`; });
+    }
+    
+    function changerMagasin() {
+        magasinActuel = parseInt(document.getElementById('selectMagasin').value);
+        afficherProduits();
+    }
+    
+    function ouvrirModalMagasin() {
+        if(utilisateurActuel?.role !== 'admin') { alert("Réservé à l'administrateur"); return; }
+        document.getElementById('modalMagasin').classList.remove('hidden');
+        document.getElementById('modalMagasin').classList.add('flex');
+    }
+    
+    function fermerModalMagasin() {
+        document.getElementById('modalMagasin').classList.add('hidden');
+        document.getElementById('modalMagasin').classList.remove('flex');
+    }
+    
+    function ajouterMagasin() {
+        if(utilisateurActuel?.role !== 'admin') { alert("Réservé à l'administrateur"); return; }
+        const nom = document.getElementById('newMagasinNom').value;
+        const adresse = document.getElementById('newMagasinAdresse').value;
+        if(!nom) { alert('Nom requis'); return; }
+        const newId = magasins.length > 0 ? Math.max(...magasins.map(m => m.id)) + 1 : 1;
+        magasins.push({ id: newId, nom, adresse });
+        sauvegarderDonnees();
+        afficherMagasins();
+        fermerModalMagasin();
+        document.getElementById('newMagasinNom').value = '';
+        document.getElementById('newMagasinAdresse').value = '';
+    }
+    
+    // ============ CONNEXION ============
+    function connexion() {
+        const role = document.getElementById('roleSelect').value;
+        const motDePasse = document.getElementById('motDePasse').value;
+        if(COMPTES[role] && COMPTES[role].motDePasse === motDePasse) {
+            utilisateurActuel = { ...COMPTES[role] };
+            document.getElementById('erreurConnexion').classList.add('hidden');
+            document.getElementById('ecranConnexion').classList.add('hidden');
+            document.getElementById('interfacePrincipale').classList.remove('hidden');
+            document.getElementById('btnDeconnexion').classList.remove('hidden');
+            mettreAJourAffichageParRole();
+            chargerDonnees();
+            afficherMagasins();
+            afficherProduits();
+        } else {
+            document.getElementById('erreurConnexion').classList.remove('hidden');
+        }
+    }
+    
+    function deconnexion() {
+        utilisateurActuel = null;
+        document.getElementById('ecranConnexion').classList.remove('hidden');
+        document.getElementById('interfacePrincipale').classList.add('hidden');
+        document.getElementById('btnDeconnexion').classList.add('hidden');
+        document.getElementById('motDePasse').value = '';
+    }
+    
+    // ============ INIT ============
+    document.getElementById('produitVente').addEventListener('change', () => updateTotal());
+    document.getElementById('quantiteVente').addEventListener('input', () => updateTotal());
+    function updateTotal() {
+        const select = document.getElementById('produitVente');
+        const prix = parseFloat(select.options[select.selectedIndex]?.getAttribute('data-prix') || 0);
+        const quantite = parseInt(document.getElementById('quantiteVente').value) || 0;
+        document.getElementById('totalVente').innerText = (prix * quantite).toLocaleString();
+    }
+</script>
+</body>
+</html>
